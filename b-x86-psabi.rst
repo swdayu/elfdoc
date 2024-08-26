@@ -37,8 +37,8 @@ x86 补充规范
   * `特殊分区`_
   * `符号表分区`_
   * `重定位类型`_
-
-* `程序加载`_
+  * `链接器优化`_
+  * `程序加载`_
 
 * `动态链接`_
 
@@ -1230,6 +1230,7 @@ C 栈帧
     分区名称         分区类型            分区属性
     .got            SHT_PROGBITS        SHF_ALLOC|WRITE
     .plt            SHT_PROGBITS        SHF_ALLOC|EXECINSTR
+    .eh_frame       SHT_PROGBITS        SHF_ALLOC
 
 .got
     该分区包含全局偏移表
@@ -1237,6 +1238,15 @@ C 栈帧
 .plt
     该分区包含过程链接表
 
+.eh_frame
+    该分区包含栈展开函数表
+
+调用帧（call frame）信息是展开栈必需的信息，这些信息保存在 .eh_frame 分区中。该分区由
+一个或多个子节组成，每个子节包含一个 CIE（Common Information Entry）和不同数量的 FDE
+（Frame Descriptor Entry）。一个 FDE 对应一个编译单元中显式或编译器生成的函数，所有的
+FDE 都可以访问子节开始处的 CIE。如果一个函数的代码不是一块连续的代码块，那么每个连续的子
+块都会有一个独立的 FDE。如果一个目标文件包含 C++ 模板实例化，则每个实例化对应的 FDE 之
+前都有一个单独的 CIE。
 
 符号表分区
 -----------
@@ -1246,6 +1256,28 @@ C 栈帧
 在过程链接表中分配了一个条目，并且 st_value 字段的值不是零，那么这个值是过程链接表对应
 条目第一条指令的虚拟地址。否则 st_value 字段的值为零。这个过程链接表条目的地址，被动态
 链接器用来解析函数地址引用。
+
+符号类型 STT_GNU_IFUNC 是可选的，它与 STT_FUNC 类似，不同的是它始终指向一个不接受任何
+参数并返回函数指针的函数或可执行代码片段。例如： ::
+
+    #define STT_GNU_IFUNC 10 /* symbol is indirect code object */
+
+    void foo(unsigned *data, size_t len) __attribute__((ifunc ("resolve_foo")));
+
+    static void *resolve_foo(void)
+    {
+            if (cpu_has_avx2())
+                    return foo_avx2;
+            else if (cpu_has_sse42());
+                    return foo_sse42;
+            else
+                    return foo_c;
+    }
+
+如果 STT_GNU_IFUNC 符号被重定位，重定位的评估会延迟到程序加载时。在重定位中使用的值是由
+STT_GNU_IFUNC 符号调用后返回的函数指针。STT_GNU_IFUNC 符号类型的目的是允许运行时在特定
+的函数的多个实现版本之间进行选择。通常所做的选择会考虑当前可用的硬件，并选择合适的版本。
+例如，一个程序可能会根据 CPU 是否支持特定的 SIMD 指令集来选择使用优化版本的函数。
 
 重定位类型
 -----------
@@ -1266,22 +1298,50 @@ Intel386 定义的重定位类型如下。其中 A 表示附加值；B 表示基
 的地址；GOT 表示全局偏移表的地址；L 表示重定位符号的过程链接表条目的偏移或地址，过程链接
 表条目将一个函数调用重定位到合适的目标，链接编辑器会创建一个初始的过程链接表，然后动态链
 接器会在执行过程中修改它；P 表示使用 r_offset 计算的被重定位后的存储单元的偏移或地址；
-而 S 是重定位符号的值。 ::
+S 表示重定位符号的值；Z 表示重定位符号的大小。 ::
 
-                            数据字段    计算方式
-    R_386_NONE      0       无          无
-    R_386_32        1       word32      S + A
-    R_386_PC32      2       word32      S + A - P
-    R_386_GOT32     3       word32      G + A - P
-    R_386_PLT32     4       word32      L + A - P
-    R_386_COPY      5       无          无
-    R_386_GLOB_DAT  6       word32      S
-    R_386_JMP_SLOT  7       word32      S
-    R_386_RELATIVE  8       word32      B + A
-    R_386_GOTOFF    9       word32      S + A - GOT
-    R_386_GOTPC     10      word32      GOT + A - P
-
-下面这些重定位类型有除以上计算方式之外的含义：
+                                数据字段    计算方式
+    R_386_NONE          0       无          无
+    R_386_32            1       word32      S + A
+    R_386_PC32          2       word32      S + A - P
+    R_386_GOT32         3       word32      G + A - P
+    R_386_PLT32         4       word32      L + A - P
+    R_386_COPY          5       无          无
+    R_386_GLOB_DAT      6       word32      S
+    R_386_JMP_SLOT      7       word32      S
+    R_386_RELATIVE      8       word32      B + A
+    R_386_GOTOFF        9       word32      S + A - GOT
+    R_386_GOTPC         10      word32      GOT + A - P
+    R_386_TLS_TPOFF     14      word32
+    R_386_TLS_IE        15      word32
+    R_386_TLS_GOTIE     16      word32
+    R_386_TLS_LE        17      word32
+    R_386_TLS_GD        18      word32
+    R_386_TLS_LDM       19      word32
+    R_386_16            20      word16      S + A
+    R_386_PC16          21      word16      S + A - P
+    R_386_8             22      word8       S + A
+    R_386_PC8           23      word8       S + A - P
+    R_386_TLS_GD_32     24      word32
+    R_386_TLS_GD_PUSH   25      word32
+    R_386_TLS_GD_CALL   26      word32
+    R_386_TLS_GD_POP    27      word32
+    R_386_TLS_LDM_32    28      word32
+    R_386_TLS_LDM_PUSH  29      word32
+    R_386_TLS_LDM_CALL  30      word32
+    R_386_TLS_LDM_POP   31      word32
+    R_386_TLS_LDO_32    32      word32
+    R_386_TLS_IE_32     33      word32
+    R_386_TLS_LE_32     34      word32
+    R_386_TLS_DTPMOD32  35      word32
+    R_386_TLS_DTPOFF32  36      word32
+    R_386_TLS_TPOFF32   37      word32
+    R_386_SIZE32        38      word32      Z + A
+    R_386_TLS_GOTDESC   39      word32
+    R_386_TLS_DESC_CALL 40      无          无
+    R_386_TLS_DESC      41      word32
+    R_386_IRELATIVE     42      word32      indirect (B + A)
+    R_386_GOT32X        43      word32      G + A - GOT / G + A
 
 R_386_GOT32
     计算的是符号的全局偏移表条目相对全局偏移表的偏移，可以辅助链接编辑器创建全局偏移表
@@ -1306,8 +1366,107 @@ R_386_GOTPC
     该重定位类型类似于 R_386_PC32，唯一不同的是使用全局偏移表的地址进行计算。该类型的重
     定位符号一般是 _GLOBAL_OFFSET_TABLE_，它用来辅助链接编辑器创建全局偏移表
 
+重定位类型 R_386_GOT32X 是当关闭位置无关代码时，不使用基址指针寄存器计算符号的全局偏移
+表条目的地址。下面的 ``name@GOT`` 应该使用 R_386_GOT32X 重定位，而不是 R_386_GOT32，
+其中 binop 是这些指令之一：adc、add、and、cmp、or、sbb、sub、xor。 ``mov name@GOT, %eax``
+必须编码成 0x8b 而不是 0xa0，以允许链接器优化。 ::
+
+    call *name@GOT(%reg)
+    jmp *name@GOT(%reg)
+    mov name@GOT(%reg1), %reg2
+    test %reg1, name@GOT(%reg2)
+    binop name@GOT(%reg1), %reg2
+
+    call *name@GOT
+    jmp *name@GOT
+    mov name@GOT, %reg
+    test %reg, name@GOT
+    binop name@GOT, %reg
+
+使用 R_386_8、R_386_16、R_386_PC16、R_386_PC8 重定位的程序或目标文件不符合此 ABI 标
+准，这些重定位的添加仅出于文档目的。R_386_16 和 R_386_8 重定位分别将计算值截断为 16 位
+和 8 位。
+
+R_386_TLS_TPOFF、R_386_TLS_IE、R_386_TLS_GOTIE、R_386_TLS_LE、R_386_TLS_GD、R_386_TLS_LDM、
+R_386_TLS_GD_32、R_386_TLS_GD_PUSH、R_386_TLS_GD_CALL、R_386_TLS_GD_POP、R_386_TLS_LDM_32、
+R_386_TLS_LDM_PUSH、R_386_TLS_LDM_CALL、R_386_TLS_LDM_POP、R_386_TLS_LDO_32、R_386_TLS_IE_32、
+R_386_TLS_LE_32、R_386_TLS_DTPMOD32、R_386_TLS_TPOFF32 重定位是为了完整性而列出。它
+们是 TLS ABI 扩展的一部分，在 `ELF Handling for TLS`_ 文档中描述。R_386_TLS_GOTDESC、
+R_386_TLS_DESC_CALL 和 R_386_TLS_DESC 也用于 TLS，但在撰写本文时还未在文档中记录，见
+`TLS Descriptors for IA32 and AMD64/EM64T`_ 。
+
+.. _ELF Handling for TLS: http://www.akkadia.org/drepper/tls.pdf
+.. _TLS Descriptors for IA32 and AMD64/EM64T: http://www.fsfla.org/~lxoliva/writeups/TLS/RFC-TLSDESC-x86.txt
+
+R_386_IRELATIVE 重定位与 R_386_RELATIVE 类似，不同的是这种重定位使用的值是由位于相应
+R_386_RELATIVE 重定位结果地址处的函数返回的程序地址，该函数不接受任何参数。R_386_IRELATIVE
+重定位的一个用途时避免在加载时对本地定义的 STT_GNU_IFUNC 符号进行名称查找。对这种重定位
+的支持是可选的，但是对于 STT_GNU_IFUNC 来说支持 R_386_IRELATIVE 是必须的。
+
+在使用 STT_GNU_IFUNC 符号时，R_386_IRELATIVE 允许程序在运行时解析函数的地址，而不是在
+加载时解析。这意味着程序可以先加载并开始执行，然后在实际需要调用函数时，才确定并使用正确
+的函数地址。例如，如果一个程序包含多个硬件架构的特定优化版本的函数，STT_GNU_IFUNC 符号
+可以用来在运行时选择最合适的版本，而 R_386_IRELATIVE 重定位确保了这种选择可以在运行时动
+态进行，而不是在程序加载时静态决定。
+
+链接器优化
+-----------
+
+这里描述链接器可能执行的优化。在小型和中型模型中，当同一个函数符号既有 PLT 引用也有 GOT
+引用时，通常链接器会为 PLT 条目创建一个 GOTPLT slot，并为 GOT 引用创建一个 GOT slot。
+一个运行时 JUMP_SLOT 重定位会创建出来更新 GOTPLT slot，以及一个运行时 GLOB_DAT 重定位
+被创建出来更新 GOT slot。这两个重定位都在运行时将相同的符号值应用到 GOTPLT slot 和 GOT
+slot。作为优化，链接器可能会将 GOTPLT slot 和 GOT slot 合并为一个单一的 GOT slot，并
+移除运行时的 JUMP_SLOT 重定位。
+
+它将常规的 PLT 条目替换为一个 GOT PLT 条目，该条目通过 GOT slot 进行间接跳转，并将 PLT
+引用解析到 GOT PLT 条目。间接跳转时一个 5 字节的指令。nop 可以编码成一个 3 字节的指令
+或者 11 字节的指令，根据 PLT slot 是 8 字节还是 16 字节。 ::
+
+    .PLT:   jmp     [GOTPLT slot]
+            pushl   relocation index
+            jmp     .PLT0
+
+    .PLT:   jmp     [GOT slot]
+            nop
+
+这种优化不适用于 STT_GNU_IFUNC 符号，因为它的 GOTPLT slot 会被解析为选定的那个函数实
+现，并且 GOT slot 会被解析为它们的 PLT 条目。如果需要指针相等性，则必须避免这种优化，因
+为在这种情况下，符号值不会被清除并且动态链接器也不会更新 GOT slot。如果在这种情况下使用
+该优化，生成的二进制文件在运行时将陷入无限循环。
+
+**R_386_GOT32X 重定位优化**
+
+Intel386 指令编码支持将针对本地定义的符号 foo 的内存操作数的 R_386_GOT32X 重定位的某些
+指令转换为立即操作数的形式。
+
+将 call、jmp、mov 指令的内存操作数转换成立即操作数： ::
+
+    内存操作数                      立即操作数
+    call *foo@GOT(%reg)             nop call foo
+    call *foo@GOT(%reg)             call foo nop
+    jmp *foo@GOT(%reg)              jmp foo nop
+    mov foo@GOT(%reg1), %reg2       lea foo@GOTOFF(%reg1), %reg2
+
+当位置无关代码关闭的时候，将 call、jmp、mov、test、binop 内存操作数转换成立即操作数，
+其中 binop 是 adc、add、and、cmp、or、sbb、sub、xor 指令之一。 ::
+
+    内存操作数                      立即操作数
+    call *foo@GOT                   nop call foo
+    call *foo@GOT                   call foo nop
+    jmp *foo@GOT                    jmp foo nop
+    mov foo@GOT, %reg               lea foo, %reg
+    test %reg, foo@GOT              test $foo, %reg
+    binop foo@GOT, %reg             binop $foo, %reg
+    call *foo@GOT(%reg)             nop call foo
+    call *foo@GOT(%reg)             call foo nop
+    jmp *foo@GOT(%reg)              jmp foo nop
+    mov foo@GOT(%reg1), %reg2       lea foo, %reg2
+    test %reg1, name@GOT(%reg2)     test $foo, %reg1
+    binop name@GOT(%reg1), %reg2    binop $foo, %reg2
+
 程序加载
-=========
+---------
 
 当系统创建程序映像时，逻辑上是将一个文件的分段拷贝到一个虚拟内存分段。但是系统什么时候以
 及是否物理地读取文件，依赖于程序的执行行为。进程在真正引用对应的逻辑页之前不需要分配一个
