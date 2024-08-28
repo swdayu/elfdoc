@@ -2,7 +2,7 @@ ELF 文档翻译和整理（Executable and Linking Format）
 
 1. `通用格式规范 <a-generic-abi.rst>`_
 2. `x86 补充规范 <b-x86-psabi.rst>`_
-3. `arm 补充规范 <c-arm-psabi.rst>`_
+3. `x64 补充规范 <c-x64-psabi.rst>`_
 
 参考链接
 
