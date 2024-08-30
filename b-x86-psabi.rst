@@ -4,7 +4,7 @@ x86 补充规范
 
   * `处理器架构`_
   * `数据表示`_
-  * `位域`_
+  * `复合类型`_
 
 * `函数调用约定`_
 
@@ -79,31 +79,32 @@ ABI（应用程序二进制接口）既不对系统的执行性能施加限制�
 位大小的对象。或者可以使用 twobyte、fourbyte、eightbyte 表示。以下是 C 语言中的基本类
 型与处理器类型的对应关系和信息： ::
 
-    C 语言类型                                      大小和对齐  Intel386
-    _Bool                                           1   1       boolean
-    char/signed char/unsigned char                  1   1       byte
-    short/signed short/unsigned short               2   2       twobyte (halfword)
-    int/signed int/enum/unsigned int                4   4       fourbyte (word)
-    long/signed long/unsigned long                  4   4       fourbyte (word)
-    long long/signed long long/unsigned long long   8   4       eightbyte (doubleword)
-    any-type*/any-type(*)()                         4   4       fourbyte
-    float                                           4   4       single (IEEE-754)
-    double/long double††††                          8   4       double (IEEE-754)
-    __float80/long double††††                       12  4       80-bit extended (IEEE-754)
-    __float128                                      16  16      128-bit extended (IEEE-754)
-    _Complex float                                  8   4       complex single (IEEE-754)
-    _Complex double/_Complex long double††††        16  4       complex double (IEEE-754)
-    _Complex __float80/_Complex long double††††     24  4       complex 80-bit extended (IEEE-754)
-    _Complex __float128                             32  16      complex 128-bit extended (IEEE-754)
-    _Decimal32                                      4   4       32bit BID (IEEE-754R)
-    _Decimal64                                      8   8       64bit BID (IEEE-754R)
-    _Decimal128                                     16  16      128bit BID (IEEE-754R)
-    __m64                                           8   8       MMX and 3DNow!
-    __m128                                          16  16      SSE and SSE-2
-    __m256                                          32  32      AVX
-    __m512                                          64  64      AVX-512
+    C 语言类型                          大小和对齐  Intel386
+    _Bool                               1   1       boolean
+    char/signed/unsigned                1   1       byte
+    short/signed/unsigned               2   2       twobyte (halfword)
+    int/signed/enum/unsigned            4   4       fourbyte (word)
+    long/signed/unsigned                4   4       fourbyte (word)
+    long long/signed/unsigned           8   4       eightbyte (doubleword)
+    any-type*/any-type(*)()             4   4       fourbyte
+    float                               4   4       single (IEEE-754)
+    double/long double†††               8   4       double (IEEE-754)
+    __float80††/long double†††          12  4       80-bit extended (IEEE-754)
+    __float128††                        16  16      128-bit extended (IEEE-754)
+    _Complex float                      8   4       complex single (IEEE-754)
+    _Complex double/long double†††      16  4       complex double (IEEE-754)
+    _Complex __float80††/long double††† 24  4       complex 80-bit extended (IEEE-754)
+    _Complex __float128††               32  16      complex 128-bit extended (IEEE-754)
+    _Decimal32                          4   4       32bit BID (IEEE-754R)
+    _Decimal64                          8   8       64bit BID (IEEE-754R)
+    _Decimal128                         16  16      128bit BID (IEEE-754R)
+    __m64††                             8   8       MMX and 3DNow!
+    __m128††                            16  16      SSE and SSE-2
+    __m256††                            32  32      AVX
+    __m512††                            64  64      AVX-512
 
-    †††† 类型 long double 在 Android 平台上与 double 相同，都是 8 字节
+    †† 对这些类型的支持是可选的
+    ††† 类型 long double 在 Android 平台上与 double 相同，都是 8 字节
 
 Intel386 架构不需要双精度浮点值是8字节对齐的，但是为了兼容 x64 的数据结构，编译器可以将
 它对齐到8字节边界。然而，这样生成的代码（包括数据结构和函数调用约定）是与 Intel386 ABI
@@ -120,6 +121,9 @@ Intel386 架构的最初实现仅通过软件仿真来支持128位浮点类型�
 Intel386 并不需要所有的类型都是根据字节大小对齐的，对齐的数据访问速度只是比不对齐的快，
 其他行为都是相同的。仅有的例外是 __float128、_Complex __float128、_Decimal128、__m128、
 __m256、__m512 必须是严格对齐的。
+
+复合类型
+---------
 
 结构体和联合体的对齐字节数是其成员的最大对齐地址数，每个成员位于满足对齐要求的最低偏移处。
 任何对象的大小必须是对象对齐字节数的倍数。结构体和联合体可以通过填充来满足大小和对齐要求，
@@ -138,9 +142,6 @@ __m256、__m512 必须是严格对齐的。
     [                 d                ]
     [                 d                ]
     [   tail padding  |        s       ]
-
-位域
------
 
 C 语言中的结构体和联合体可以包含位域成员，它定义一个指定了比特位宽度的整型数据。位域类型
 成员的值范围： ::
