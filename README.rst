@@ -13,3 +13,5 @@ ELF 文档翻译和整理（Executable and Linking Format）
 * https://refspecs.linuxfoundation.org/elf/
 * https://agner.org/optimize/
 * https://github.com/ARM-software/abi-aa/releases
+* https://www.muppetlabs.com/~breadbox/software/tiny/
+
