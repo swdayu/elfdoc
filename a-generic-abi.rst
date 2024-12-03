@@ -562,7 +562,7 @@ sh_entsize
     sh_addr         0           没有分区地址
     sh_offset       0           没有对应的分区
     sh_size         0或头部个数  如果不是0表示实际的分区头部个数
-    sh_link         0或分区索引  如果不是0表示分区头部字符串表分区的索引
+    sh_link         0或分区索引  如果不是0表示分区名字字符串表头部的索引
     sh_info         0           没有额外信息
     sh_addralign    0           不需要对齐
     sh_entsize      0           分区不包含固定大小的条目
@@ -839,9 +839,9 @@ GRP_MASKPROC
     .symtab          SHT_SYMTAB         O(SHF_ALLOC)
     .symtab_shndx    SHT_SYMTAB_SHNDX   O(SHF_ALLOC)
     .tbss            SHT_NOBITS         SHF_ALLOC|WRITE|TLS
-    .tdata           SHT_STRTAB         SHF_ALLOC|WRITE|TLS
-    .tdata1          SHT_STRTAB         SHF_ALLOC|WRITE|TLS
-    .text            SHT_STRTAB         SHF_ALLOC|EXECINSTR
+    .tdata           SHT_PROGBITS       SHF_ALLOC|WRITE|TLS
+    .tdata1          SHT_PROGBITS       SHF_ALLOC|WRITE|TLS
+    .text            SHT_PROGBITS       SHF_ALLOC|EXECINSTR
 
 .bss
     未初始化数据，程序开始运行时初始化为全零，该分区不占据文件空间
@@ -1751,10 +1751,10 @@ dlopen()，但自己的动态链接结构体又没有使用 $ORIGIN 时，动态
 使用的哈希函数如下： ::
 
     // 传入符号名称，返回用于计算桶索引的值
-    uint32 elf_hash(const byte* symnm) {
+    uint32 elf_hash(const byte* sym_name) {
         uint32 h = 0, g;
-        while (*symnm) {
-            h = (h << 4) + *symnm++;
+        while (*sym_name) {
+            h = (h << 4) + *sym_name++;
             g = (h & 0xf0000000);
             if (g) {
                 h ^= g >> 24;
@@ -1765,15 +1765,17 @@ dlopen()，但自己的动态链接结构体又没有使用 $ORIGIN 时，动态
     }
 
 nbucket
-    桶的个数，bucket[elf_hash(symnm)%nbucket] 存储的是符号索引
+    桶的个数，bucket[elf_hash(sym_name)%nbucket] 存储的是符号索引
 nchain
     链接的个数，必须等于符号表中符号的个数
 bucket
     通过 elf_hash 哈希函数计算符号对应的桶索引，对应桶索引中保存的是该符号在符号表中的
     索引，符号表定义在 DT_SYMTAB 动态链接结构体中
 chain
-    如果桶中保存的不是这个符号，继续查找 chain[符号索引] 中符号索引对应的符号，依次类
-    推，直到找到对应符号，或者遇到 STN_UNDEF 表示没有这个符号
+    该数组保存的也是符号表索引，数组大小是nchain，即符号表中符号的个数，因此符号表索引
+    也索引 chain 表的元素。bucket[elf_hash(sym_name)%nbucket] 计算出的索引 y 同时索
+    引符号表和 chain 表，如果 y 索引的符号匹配失败，继续匹配 chain[y]、chain[y+1] 对
+    应的符号名称，直到匹配成功或 chain 元素的值为 STN_UNDEF。
 
 初始和终止函数
 --------------
